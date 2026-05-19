@@ -1,0 +1,368 @@
+#pragma kernel CSMain
+
+RWTexture2D<float4> Result;
+
+int2 Size;
+int FocalLength;
+float3 PlanetPos;
+float PlanetRadius;
+float3 CameraPos;
+float3 CameraDir;
+float3 SunDir;
+
+int Octaves;
+bool AbsoluteTerrain;
+float StartFrequency;
+float StartAmplitude;
+float WarpStrength;
+float NormalStrength;
+
+float PI = acos(-1);
+
+
+struct PlanetSample
+{
+    float height;
+    float slope;
+    float3 normal;
+    float temperature;
+    float humidity;
+};
+
+
+bool SphereIntersection(float3 rayStart, float3 rayDir, float3 spherePos, float sphereRadius, out float t)
+{
+    float3 oc = rayStart - spherePos;
+
+    float a = dot(rayDir, rayDir);
+    float b = 2.0 * dot(oc, rayDir);
+    float c = dot(oc, oc) - sphereRadius * sphereRadius;
+
+    float discriminant = b * b - 4.0 * a * c;
+
+    if (discriminant < 0.0)
+    {
+        t = -1.0;
+        return false;
+    }
+
+    float sqrtD = sqrt(discriminant);
+
+    float t1 = (-b - sqrtD) / (2.0 * a);
+    float t2 = (-b + sqrtD) / (2.0 * a);
+
+    t = min(t1, t2);
+
+    if (t < 0.0)
+        t = max(t1, t2);
+
+    return t >= 0.0;
+}
+
+
+float3 hash33(float3 p)
+{
+    p = float3(
+        dot(p,float3(127.1,311.7,74.7)),
+        dot(p,float3(269.5,183.3,246.1)),
+        dot(p,float3(113.5,271.9,124.6))
+    );
+
+    return -1.0 + 2.0 * frac(sin(p) * 43758.5453123);
+}
+
+
+float4 GradientNoise3D_Deriv(float3 x)
+{
+    float3 i = floor(x);
+    float3 f = frac(x);
+
+    float3 u  = f*f*f*(f*(f*6.0 - 15.0) + 10.0);
+    float3 du = 30.0*f*f*(f*(f - 2.0) + 1.0);
+
+    float3 ga = hash33(i + float3(0,0,0));
+    float3 gb = hash33(i + float3(1,0,0));
+    float3 gc = hash33(i + float3(0,1,0));
+    float3 gd = hash33(i + float3(1,1,0));
+    float3 ge = hash33(i + float3(0,0,1));
+    float3 gf = hash33(i + float3(1,0,1));
+    float3 gg = hash33(i + float3(0,1,1));
+    float3 gh = hash33(i + float3(1,1,1));
+
+    float va = dot(ga, f - float3(0,0,0));
+    float vb = dot(gb, f - float3(1,0,0));
+    float vc = dot(gc, f - float3(0,1,0));
+    float vd = dot(gd, f - float3(1,1,0));
+    float ve = dot(ge, f - float3(0,0,1));
+    float vf = dot(gf, f - float3(1,0,1));
+    float vg = dot(gg, f - float3(0,1,1));
+    float vh = dot(gh, f - float3(1,1,1));
+
+    float v =
+        va +
+        u.x * (vb - va) +
+        u.y * (vc - va) +
+        u.z * (ve - va) +
+        u.x * u.y * (va - vb - vc + vd) +
+        u.y * u.z * (va - vc - ve + vg) +
+        u.z * u.x * (va - vb - ve + vf) +
+        u.x * u.y * u.z * (-va + vb + vc - vd + ve - vf - vg + vh);
+
+    float3 d =
+        ga +
+        u.x * (gb - ga) +
+        u.y * (gc - ga) +
+        u.z * (ge - ga) +
+        u.x * u.y * (ga - gb - gc + gd) +
+        u.y * u.z * (ga - gc - ge + gg) +
+        u.z * u.x * (ga - gb - ge + gf) +
+        u.x * u.y * u.z * (-ga + gb + gc - gd + ge - gf - gg + gh) +
+
+        du * (
+            float3(vb - va, vc - va, ve - va) +
+            u.yzx * float3(
+                va - vb - vc + vd,
+                va - vc - ve + vg,
+                va - vb - ve + vf
+            ) +
+            u.zxy * float3(
+                va - vb - ve + vf,
+                va - vb - vc + vd,
+                va - vc - ve + vg
+            ) +
+            u.yzx * u.zxy * (-va + vb + vc - vd + ve - vf - vg + vh)
+        );
+
+    return float4(v, d);
+}
+
+
+float4 PlanetGradientNoiseNormal(float3 surfacePoint, float heightScale)
+{
+    float4 n = GradientNoise3D_Deriv(surfacePoint);
+
+    float height = abs(n.x);
+
+    float signH = (n.x >= 0.0) ? 1.0 : -1.0;
+    float3 gradient = signH * n.yzw;
+
+    float3 sphereNormal = normalize(surfacePoint);
+
+    float3 surfaceGradient = gradient - sphereNormal * dot(gradient, sphereNormal);
+
+    float3 normal = normalize(sphereNormal - heightScale * surfaceGradient);
+
+    return float4(normal, height);
+}
+
+
+float4 fbm (float3 p, float H, int octaves)
+{
+    float G = exp2(-H);
+    float f = 0.05;
+    float a = 1;
+    float4 t = float4(0, 0, 0, 0);
+    
+    for (int i=0; i<octaves; i++)
+    {
+        t += a*PlanetGradientNoiseNormal(f*p, 0.25);
+        f *= 2;
+        a *= G;
+    }
+
+    return t;
+}
+
+
+float4 domainWarping (float3 p)
+{
+    float H = 0.5;
+    int octaves = 15;
+
+    float3 q = float3(fbm(p + float3(0, 0, 0), H, octaves).w, fbm(p + float3(5.2, 1.3, 2.7), H, octaves).w, fbm(p + float3(6.5, 1.6, 3.2), H, octaves).w);
+
+    return fbm(p + 4.0*q, H, octaves);
+}
+
+
+float4 FbmHeightGradient(float3 p, float frequency, int octaves)
+{
+    float height = 0.0;
+    float3 gradient = 0.0;
+
+    float H = 1;
+    float G = exp2(-H);
+    float f = frequency;
+    float a = StartAmplitude;
+
+    float maxAmplitude = 0.0;
+
+    for (int i = 0; i < octaves; i++)
+    {
+        float4 n = GradientNoise3D_Deriv(f * p);
+
+        height += a * n.x;
+        gradient += a * f * n.yzw;
+
+        maxAmplitude += a;
+
+        f *= 2.0;
+        a *= G;
+    }
+
+    height /= maxAmplitude;
+    gradient /= maxAmplitude;
+
+    return float4(0.5 * height + 0.5, 0.5 * gradient);
+}
+
+
+float4 WarpedHeightGradient(float3 p)
+{
+    float warpStrength = WarpStrength;
+    float warpFrequency = 10.0;
+    int warpOctaves = 10;
+
+    float qx = FbmHeightGradient(p + float3(0.0, 0.0, 0.0), warpFrequency, warpOctaves).x;
+    float qy = FbmHeightGradient(p + float3(5.2, 1.3, 2.7), warpFrequency, warpOctaves).x;
+    float qz = FbmHeightGradient(p + float3(6.5, 1.6, 3.2), warpFrequency, warpOctaves).x;
+
+    float3 q = float3(qx, qy, qz);
+
+    return FbmHeightGradient(p + warpStrength * q, StartFrequency, Octaves);
+}
+
+
+PlanetSample SamplePlanet(float3 p)
+{
+    PlanetSample s;
+
+    // Height & Normal
+    float4 hg = WarpedHeightGradient(p);
+
+    float3 gradient;
+
+    if (AbsoluteTerrain)
+    {
+        float signH = (hg.x >= 0.0) ? 1.0 : -1.0;
+
+        s.height = abs(hg.x);
+        gradient = signH * hg.yzw;
+    }
+
+    else
+    {
+        s.height = hg.x;
+        gradient = hg.yzw;
+    }
+
+    float3 sphereNormal = normalize(p);
+
+    float3 surfaceGradient = gradient - sphereNormal * dot(gradient, sphereNormal);
+
+    float normalStrength = NormalStrength;
+    s.normal = normalize(sphereNormal - normalStrength * surfaceGradient);
+
+
+    // Slope
+    s.slope = saturate(length(surfaceGradient));
+
+
+    // Temperature
+    float latTemperature = sqrt(saturate(1.0 - sphereNormal.y * sphereNormal.y));
+    float localTemperature = saturate(FbmHeightGradient(p, 3, 10).x - s.height);
+    float temperature = 0.75 * latTemperature + 0.25 * localTemperature;
+
+    s.temperature = temperature;
+
+
+    return s;
+}
+
+
+float3 PlanetColor(PlanetSample planet)
+{
+    float3 sand = float3(0.75, 0.62, 0.42);
+    float3 rock = float3(0.4, 0.34, 0.32);
+    float3 snow = float3(0.85, 0.85, 0.82);
+
+    float3 color = sand;
+
+    float rockSlopeMask  = smoothstep(0.5, 1.0, planet.slope);
+    float rockHeightMask = smoothstep(0.55, 0.65, planet.height);
+    float rockMask = saturate(0.3*rockSlopeMask + 0.7*rockHeightMask);
+
+    float snowHeightMask = smoothstep(0.45, 0.85, planet.height);
+    float snowColdMask   = 1.0 - smoothstep(0.65, 0.7, planet.temperature);
+    float snowMask = saturate(0.5*snowHeightMask + 0.5*snowColdMask);
+
+    color = lerp(color, rock, rockMask);
+    color = lerp(color, snow, snowMask);
+
+    return saturate(color);
+}
+
+
+float3 ColorGradient(float value)
+{   
+    float3 orange = float3(1.0, 0.647, 0.0);
+    float3 blue = float3(0.0, 0.0, 1.0);
+    
+    float3 color = lerp(blue, orange, value);
+
+    return color;
+}
+
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= Size.x || id.y >= Size.y)
+        return;
+
+    float2 uv = id.xy - Size * 0.5;
+
+    float3 right = normalize(cross(float3(0,1,0), CameraDir));
+    float3 up = normalize(cross(CameraDir, right));
+
+    float3 rayDir = normalize(CameraDir * FocalLength + right * uv.x + up * uv.y);
+    float cloudT;
+    float groundT;
+
+    // Clouds
+    if (SphereIntersection(CameraPos, rayDir, PlanetPos, PlanetRadius * 1.003, cloudT))
+    {
+        float3 cloudIntersectionPoint = CameraPos + rayDir * cloudT;
+        float3 cloudNormal = normalize(cloudIntersectionPoint - PlanetPos);
+
+        float cloudDensity = 0.1;
+
+        float cloudLight = saturate(dot(cloudNormal, sunDir));
+        
+        
+    }
+
+    // Ground
+    if (SphereIntersection(CameraPos, rayDir, PlanetPos, PlanetRadius, groundT))
+    {
+        float3 intersectionPoint = CameraPos + rayDir * groundT;
+        float3 sphereNormal = normalize(intersectionPoint - PlanetPos);
+
+        PlanetSample planet = SamplePlanet(sphereNormal);
+
+        float3 surfaceColor = PlanetColor(planet);
+        //float3 surfaceColor = ColorGradient(planet.temperature);
+
+        float directLight = saturate(dot(planet.normal, SunDir));
+        float ambientLight = 0.01;
+        float surfaceIllumination = directLight + ambientLight;
+
+        float3 color = surfaceColor * surfaceIllumination;
+        Result[id.xy] = float4(color.x, color.y, color.z, 1.0);
+        return;
+    }
+
+    float4 black = float4(0, 0, 0, 1.0);
+
+    Result[id.xy] = black;
+}

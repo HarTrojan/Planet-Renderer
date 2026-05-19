@@ -45,3 +45,10 @@ The ability to zoom really shows the fractal Brownian motion that I implemented 
 <img width="499" height="509" alt="image" src="https://github.com/user-attachments/assets/72ec6e57-af79-408e-bb09-507009aaa592" />
 
 # 15th of May – Coloring the planet
+
+Up until this point, the planet has been completely white. Planetary features have been visible only through their normals that are shaded by the sun. This has been useful when evaluating the terrain generation, but it was now time to add some colors. 
+
+I began by adding temperature as another parameter to the planet’s surface beside height. I made it partially depend on noise but mostly depend on the latitude, making it warmer along the equator and colder towards the poles. The temperature then determines where the surface is covered with snow. If the temperature of a sample point is below a threshold value, it is painted white. 
+
+The height of the sample point determines whether to assign it the color of sand or that of rock. Lower terrain corresponds to sand and higher to rock, and the colors are interpolated to create natural transitions. 
+This coloring results in the biomes visible in the image above. This system could be expanded to include more parameters, for example humidity and soil types, as well as more biomes such as plains, forests and oceans. This is one of my plans for the future of this project.

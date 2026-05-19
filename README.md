@@ -33,7 +33,7 @@ Domain warping: [Inigo Quilez :: computer graphics, maths, shaders, fractals, de
 
 ---
  
-<img width="471" height="470" alt="image" src="https://github.com/user-attachments/assets/51e53444-1c05-4739-af7e-da75f1dc5d50" /> <video src="demo.mp4" controls width="48%"></video>
+<img width="471" height="470" alt="image" src="https://github.com/user-attachments/assets/51e53444-1c05-4739-af7e-da75f1dc5d50" /> <img src="preview.gif" width="48%" />
 
 # 10th of May – Controlling the camera
 The image above is the result of tuning the techniques I implemented in the previous blog, to achieve realistic and natural terrain. However, this is not the topic of today’s blog. 

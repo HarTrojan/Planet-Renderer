@@ -11,7 +11,7 @@ Lighting the sphere was then very simple. The illumination of each point is calc
 
 ---
 
-<img width="48%" height="445" alt="image" src="https://github.com/user-attachments/assets/1a2cb3c9-775d-4bc9-99a6-8cd03d1e6f3a" /> <img width="48%" height="445" alt="image" src="https://github.com/user-attachments/assets/3065449e-2687-4989-91b4-3bfea108b74e" />
+<img width="48%" height="480" alt="image" src="https://github.com/user-attachments/assets/1a2cb3c9-775d-4bc9-99a6-8cd03d1e6f3a" /> <img width="48%" height="480" alt="image" src="https://github.com/user-attachments/assets/3065449e-2687-4989-91b4-3bfea108b74e" />
 
 # 9th of May – Implementing noise
 

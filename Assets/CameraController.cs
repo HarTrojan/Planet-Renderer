@@ -23,10 +23,13 @@ public class CameraController : MonoBehaviour
 
     void Update()
     {
+        // Height above planet surface
         float heightAboveSurface = distance - planetRadius;
 
+        // Pan speed scaled with zoom level
         float panSpeed = orbitSpeed * heightAboveSurface / planetRadius;
 
+        // Planet circomference compensation near poles
         float latitudeScale = Mathf.Max(Mathf.Cos(pitch), 0.05f);
 
         float yawSpeed = panSpeed / latitudeScale;
@@ -54,8 +57,10 @@ public class CameraController : MonoBehaviour
 
         if (scroll != 0)
         {
+            // Exponential zoom scaling
             heightAboveSurface *= Mathf.Exp(-scroll * zoomSpeed);
 
+            // Prevent camera from reacing surface
             heightAboveSurface =
                 Mathf.Max(heightAboveSurface, 0.0001f);
 

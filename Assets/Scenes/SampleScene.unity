@@ -274,6 +274,13 @@ MonoBehaviour:
   computeShader: {fileID: 7200000, guid: 11736122acfdd77408215ffff4b51cc7, type: 3}
   width: 1024
   height: 1024
+  focalLength: 768
+  octaves: 15
+  startFrequency: 9.06
+  startAmplitude: 1
+  warpStrength: 0.4
+  normalStrength: 0.007
+  absoluteTerrain: 0
 --- !u!114 &330585549
 MonoBehaviour:
   m_ObjectHideFlags: 0

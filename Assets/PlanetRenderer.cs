@@ -10,9 +10,9 @@ public class PlanetRenderer : MonoBehaviour
     [SerializeField] private int height = 1024;
     [SerializeField] private int focalLength = 768;
     [SerializeField] private int octaves = 20;
-    [SerializeField] private float startFrequency = 0.1f;
+    [SerializeField] private float startFrequency = 9.06f;
     [SerializeField] private float startAmplitude = 1.0f;
-    [SerializeField] private float warpStrength = 0.0f;
+    [SerializeField] private float warpStrength = 0.4f;
     [SerializeField] private float normalStrength = 0.01f;
     [SerializeField] private bool absoluteTerrain = false;
 
@@ -29,8 +29,10 @@ public class PlanetRenderer : MonoBehaviour
     {
         cameraPos = newPos;
 
+        // Camera direction calculation
         Vector3 cameraDir = (planetPos - cameraPos).normalized;
 
+        // Camera position and direction is sent to the shader
         computeShader.SetFloats("CameraPos",
             cameraPos.x,
             cameraPos.y,
@@ -47,20 +49,25 @@ public class PlanetRenderer : MonoBehaviour
 
     void Start()
     {
+        // Shader kernel setup
         kernel = computeShader.FindKernel("CSMain");
 
+        // Creation of output texture
         texture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
         texture.enableRandomWrite = true;
         texture.Create();
 
         rawImage.texture = texture;
 
+        // Shader output setup
         computeShader.SetTexture(kernel, "Result", texture);
         computeShader.SetInts("Size", width, height);
         computeShader.SetInts("FocalLength", focalLength);
 
+        // Sun direction calculation
         sunDir = new Vector3(MathF.Cos(sunAngle), 0.0f, MathF.Sin(sunAngle));
 
+        // Parameters sent to shader
         computeShader.SetFloats("PlanetPos", planetPos.x, planetPos.y, planetPos.z);
         computeShader.SetFloats("PlanetRadius", planetRadius);
         computeShader.SetFloats("CameraPos", cameraPos.x, cameraPos.y, cameraPos.z);
@@ -76,7 +83,8 @@ public class PlanetRenderer : MonoBehaviour
 
 
     void Update()
-    {
+    {   
+        // Parameters sent to shader each frame
         computeShader.SetInt("Octaves", octaves);
         computeShader.SetInts("FocalLength", focalLength);
         computeShader.SetFloat("StartFrequency", startFrequency);
@@ -85,9 +93,11 @@ public class PlanetRenderer : MonoBehaviour
         computeShader.SetFloat("NormalStrength", normalStrength);
         computeShader.SetBool("AbsoluteTerrain", absoluteTerrain);
 
+        // Thread number calculation
         int groupsX = Mathf.CeilToInt(width / 8f);
         int groupsY = Mathf.CeilToInt(height / 8f);
 
+        // Shader dispatch
         computeShader.Dispatch(kernel, groupsX, groupsY, 1);
     }
 

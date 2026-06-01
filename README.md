@@ -1,5 +1,5 @@
 # DH2323 Computer Graphics & Interaction - Project
-**Report:** [*Planet Renderer Report*]("DH2323_planet_renderer_report.pdf")
+**Report:** [*Planet Renderer Report*](DH2323_planet_renderer_report.pdf)
 
 # BLOG
 

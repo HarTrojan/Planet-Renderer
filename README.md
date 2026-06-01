@@ -1,3 +1,6 @@
+# DH2323 Computer Graphics & Interaction - Project
+**Report:** [*Planet Renderer Report*]("DH2323_planet_renderer_report.pdf")
+
 # BLOG
 
 <img width="493" height="496" alt="image" src="https://github.com/user-attachments/assets/5944b84d-0d04-42dd-a465-1943a25f2778" />
